@@ -1,0 +1,220 @@
+# SERVER PULSE - SERVER SETUP (copy & paste)
+# Ubuntu 22.04 / 24.04, a user with sudo, about 10 minutes.
+
+# HOW TO USE
+# - Paste each STEP into the server's terminal, in order, and wait for it to finish.
+# - In STEP 5 do EITHER 5A (Tailscale, recommended) OR 5B (ngrok), not both.
+# - Lines starting with # are notes; they are safe to paste.
+
+# ========================================================================
+# STEP 1 - Create your passwords
+# ========================================================================
+# Makes two random passwords and saves them in ~/.server-pulse (only you can read it).
+# Expect: two lines, OWNER_PASS=... and APP_PASS=...
+
+[ -f ~/.server-pulse ] || {
+  printf "OWNER_PASS=%s\nAPP_PASS=%s\n" \
+    "$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20)" \
+    "$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20)" > ~/.server-pulse
+  chmod 600 ~/.server-pulse
+}
+cat ~/.server-pulse
+
+# ========================================================================
+# STEP 2 - btop in the browser
+# ========================================================================
+# Expect at the end: active
+
+sudo apt update && sudo apt install -y btop curl wget python3
+sudo wget -qO /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.$(uname -m)"
+sudo chmod +x /usr/local/bin/ttyd
+
+sudo tee /etc/systemd/system/btop-web.service > /dev/null <<EOF
+[Unit]
+Description=btop live in browser (ttyd)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=$USER
+Environment=TERM=xterm-256color
+ExecStart=/usr/local/bin/ttyd -p 7681 -i lo -t titleFixed=btop-live -t fontSize=14 -t disableLeaveAlert=true btop
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload && sudo systemctl enable --now btop-web
+systemctl is-active btop-web
+
+# ========================================================================
+# STEP 3 - Netdata (records every second, keeps 30 days)
+# ========================================================================
+# Expect at the end: 200
+
+wget -qO /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh
+sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive
+
+sudo tee -a /etc/netdata/netdata.conf > /dev/null <<'EOF'
+
+[web]
+    bind to = 127.0.0.1
+
+[db]
+    mode = dbengine
+    dbengine tier 0 retention time = 30d
+EOF
+
+sudo systemctl restart netdata
+sleep 5
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:19999/api/v1/info
+
+# ========================================================================
+# STEP 4 - Login in front of both (Caddy)
+# ========================================================================
+# Expect: Valid configuration, then 200
+
+source ~/.server-pulse
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https gnupg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list > /dev/null
+sudo apt update && sudo apt install -y caddy
+
+OWNER_HASH=$(caddy hash-password --plaintext "$OWNER_PASS")
+APP_HASH=$(caddy hash-password --plaintext "$APP_PASS")
+
+sudo tee /etc/caddy/Caddyfile > /dev/null <<EOF
+:8080 {
+    bind 127.0.0.1
+    encode zstd gzip
+    basic_auth {
+        owner $OWNER_HASH
+        dashboard $APP_HASH
+    }
+    redir /history /history/
+    handle_path /history/* {
+        reverse_proxy 127.0.0.1:19999
+    }
+    handle {
+        reverse_proxy 127.0.0.1:7681
+    }
+}
+EOF
+
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl enable --now caddy && sudo systemctl restart caddy
+sleep 2
+curl -s -o /dev/null -w '%{http_code}\n' -u "dashboard:$APP_PASS" http://127.0.0.1:8080/history/api/v1/info
+
+# ========================================================================
+# STEP 5A - Link with Tailscale (recommended)  [skip if you use 5B]
+# ========================================================================
+# Paste the first block. Each command prints a link: open it in a browser, log in/approve, come back.
+
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+# Then paste this. If it asks to enable HTTPS/Funnel, open its link, approve, and run it again.
+
+sudo tailscale funnel --bg 8080
+
+# NEEDED FOR 24/7: open https://login.tailscale.com/admin/machines
+#   click ... next to this server -> Disable key expiry
+#   (otherwise the link stops working after about 180 days)
+# Check (expect an https://....ts.net address and 'key expiry disabled'):
+
+tailscale funnel status
+tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"].get("KeyExpiry") or "key expiry disabled ✓")'
+
+# ========================================================================
+# STEP 5B - Link with ngrok  [skip if you used 5A]
+# ========================================================================
+# Sign up free at https://dashboard.ngrok.com
+# Copy your Authtoken and your free domain (Domains page), put them in the first two lines below.
+# Expect at the end: active
+
+NGROK_TOKEN='PASTE_YOUR_AUTHTOKEN_HERE'
+NGROK_DOMAIN='your-name.ngrok-free.app'
+
+grep -q NGROK_DOMAIN ~/.server-pulse || echo "NGROK_DOMAIN=$NGROK_DOMAIN" >> ~/.server-pulse
+curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc > /dev/null
+echo "deb https://ngrok-agent.s3.amazonaws.com bookworm main" | sudo tee /etc/apt/sources.list.d/ngrok.list > /dev/null
+sudo apt update && sudo apt install -y ngrok
+ngrok config add-authtoken "$NGROK_TOKEN"
+
+sudo tee /etc/systemd/system/ngrok-pulse.service > /dev/null <<EOF
+[Unit]
+Description=ngrok tunnel for Server Pulse
+After=network-online.target caddy.service
+Wants=network-online.target
+
+[Service]
+User=$USER
+ExecStart=$(command -v ngrok) http 8080 --url=https://$NGROK_DOMAIN --log=stdout
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload && sudo systemctl enable --now ngrok-pulse
+sleep 3
+systemctl is-active ngrok-pulse
+
+# ========================================================================
+# STEP 6 - Keep the machine awake 24/7
+# ========================================================================
+# Expect: masked (twice)
+
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+sudo mkdir -p /etc/systemd/logind.conf.d
+sudo tee /etc/systemd/logind.conf.d/server-pulse.conf > /dev/null <<'EOF'
+[Login]
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+EOF
+systemctl is-enabled sleep.target suspend.target
+
+# ========================================================================
+# STEP 7 - Get your link
+# ========================================================================
+# Expect: Link works? 200   (if 000, wait a minute and run again)
+# Send the 'SEND THIS LINK' line back privately (direct message).
+
+source ~/.server-pulse
+if [ -n "$NGROK_DOMAIN" ]; then HOST="$NGROK_DOMAIN"
+else HOST=$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))'); fi
+echo
+echo "Link works? $(curl -s -o /dev/null -w '%{http_code}' -u "dashboard:$APP_PASS" "https://$HOST/history/api/v1/info")   (200 = yes)"
+echo
+echo "SEND THIS LINK:  https://dashboard:$APP_PASS@$HOST/history"
+echo
+echo "btop in your browser: https://$HOST   user: owner   password: $OWNER_PASS"
+
+# ========================================================================
+# STEP 8 - Check it survives a reboot
+# ========================================================================
+# Reboot, log back in, then paste the check.
+# Expect: active (three times). Then run STEP 7 again: still 200.
+
+sudo reboot
+
+# after logging back in:
+
+systemctl is-active btop-web netdata caddy
+
+# ========================================================================
+# IF SOMETHING GOES WRONG
+# ========================================================================
+# Step 4 shows 401  -> run STEP 4 again.
+# Step 4 shows 502  -> sudo systemctl restart netdata ; wait 10 s ; run STEP 4's last line again.
+# Step 7 shows 000  -> Tailscale: tailscale funnel status | ngrok: systemctl status ngrok-pulse (check token/domain)
+# Lost passwords    -> cat ~/.server-pulse
+# Stops after months (Tailscale) -> sudo tailscale up, then disable key expiry (STEP 5A)
+# Stops when laptop sleeps        -> run STEP 6 and reboot
+
+# The link is read-only: it shows the server's stats but cannot change anything on the server.
