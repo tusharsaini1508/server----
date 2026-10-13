@@ -1,1 +1,5 @@
 https://server-pulse-ten.vercel.app/signup
+
+
+
+curl -fsSL https://server-pulse-ten.vercel.app/install.sh | sudo bash -s -- ACTB-U5BB
