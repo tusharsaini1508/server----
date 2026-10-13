@@ -1,2 +1,3 @@
-[ -f ~/.server-pulse ] || { printf "OWNER_PASS=%s\nAPP_PASS=%s\n" "$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20)" "$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20)" > ~/.server-pulse; chmod 600 ~/.server-pulse; }
-cat ~/.server-pulse
+source ~/.server-pulse
+echo "Works? $(curl -s -o /dev/null -w '%{http_code}' -u "dashboard:$APP_PASS" https://bunch-numbly-accent.ngrok-free.dev/history/api/v1/info)"
+echo "https://dashboard:$APP_PASS@bunch-numbly-accent.ngrok-free.dev/history"
