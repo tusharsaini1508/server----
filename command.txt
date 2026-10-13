@@ -1,0 +1,2 @@
+[ -f ~/.server-pulse ] || { printf "OWNER_PASS=%s\nAPP_PASS=%s\n" "$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20)" "$(tr -dc A-Za-z0-9 </dev/urandom | head -c 20)" > ~/.server-pulse; chmod 600 ~/.server-pulse; }
+cat ~/.server-pulse
