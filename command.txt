@@ -1,3 +1,12 @@
 source ~/.server-pulse
 echo "Works? $(curl -s -o /dev/null -w '%{http_code}' -u "dashboard:$APP_PASS" https://bunch-numbly-accent.ngrok-free.dev/history/api/v1/info)"
 echo "https://dashboard:$APP_PASS@bunch-numbly-accent.ngrok-free.dev/history"
+2
+
+
+pkill -f "ngrok http 7681"
+nohup ngrok http 127.0.0.1:19998 --url=https://bunch-numbly-accent.ngrok-free.dev > ~/ngrok-pulse.log 2>&1 &
+sleep 5
+P=$(sudo python3 -c 'import json;print(json.load(open("/etc/server-pulse/config.json"))["password"])')
+echo "Works? $(curl -s -o /dev/null -w '%{http_code}' -u "dashboard:$P" https://bunch-numbly-accent.ngrok-free.dev/history/api/v1/info)"
+echo "https://dashboard:$P@bunch-numbly-accent.ngrok-free.dev/history"
