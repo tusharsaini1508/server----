@@ -3,3 +3,6 @@ https://server-pulse-ten.vercel.app/
 
 sudo tailscale funnel --bg --https=443 http://127.0.0.1:19998; echo ---; tailscale funnel status; echo ---; tailscale status | head -3; echo ---; curl -s -o /dev/null -w 'agent answers: %{http_code}\n' http://127.0.0.1:19998/api/v1/info
 
+
+
+curl -fsSL https://server-pulse-ten.vercel.app/install.sh | sudo bash -s -- KK72-XZFC
