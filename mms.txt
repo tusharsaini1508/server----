@@ -1,1 +1,5 @@
 sudo systemctl disable --now ngrok-pulse 2>/dev/null; sudo pkill -x ngrok
+
+
+ls -la /tmp/tmp.*/ts.tgz
+
