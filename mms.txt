@@ -1,8 +1,61 @@
-https://server-pulse-ten.vercel.app/
+cat > ~/install-tailscale.sh <<'EOF'
+#!/bin/bash
+# Installs Tailscale from its official release file: no apt, no update/upgrade, no reboot.
+set -euo pipefail
+[ "$(id -u)" = 0 ] || { echo "Run it with sudo"; exit 1; }
+
+if command -v tailscale >/dev/null && systemctl is-active -q tailscaled; then
+  echo "Tailscale is already installed and running."
+else
+  case "$(uname -m)" in x86_64) ARCH=amd64 ;; aarch64) ARCH=arm64 ;; *) echo "Unsupported CPU: $(uname -m)"; exit 1 ;; esac
+  FILE=$(curl -fsSL "https://pkgs.tailscale.com/stable/?mode=json" | grep -o "tailscale_[0-9.]*_${ARCH}\.tgz" | head -1)
+  [ -n "$FILE" ] || { echo "Could not find the Tailscale download"; exit 1; }
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+  echo "Downloading $FILE ..."
+  curl -fsSL -o "$TMP/ts.tgz" "https://pkgs.tailscale.com/stable/$FILE"
+  echo "$(curl -fsSL "https://pkgs.tailscale.com/stable/$FILE.sha256")  $TMP/ts.tgz" | sha256sum -c --quiet
+  tar xzf "$TMP/ts.tgz" -C "$TMP" --strip-components=1
+  install -m 755 "$TMP/tailscaled" /usr/sbin/tailscaled
+  install -m 755 "$TMP/tailscale" /usr/bin/tailscale
+  install -m 644 "$TMP/systemd/tailscaled.service" /etc/systemd/system/tailscaled.service
+  [ -f /etc/default/tailscaled ] || install -m 644 "$TMP/systemd/tailscaled.defaults" /etc/default/tailscaled
+  systemctl daemon-reload
+  systemctl enable --now tailscaled
+  echo "Tailscale $(tailscale version | head -1) installed (starts by itself at boot)."
+fi
+
+echo
+echo "Now log in: open the link below in your browser."
+tailscale up --accept-dns=false
+echo
+tailscale status | head -3
+EOF
+sudo bash ~/install-tailscale.sh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 sudo tailscale funnel --bg --https=443 http://127.0.0.1:19998; echo ---; tailscale funnel status; echo ---; tailscale status | head -3; echo ---; curl -s -o /dev/null -w 'agent answers: %{http_code}\n' http://127.0.0.1:19998/api/v1/info
 
 
 
-curl -fsSL https://server-pulse-ten.vercel.app/install.sh | sudo bash -s -- KK72-XZFC
+
+
+
