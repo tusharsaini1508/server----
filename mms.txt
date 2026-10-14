@@ -3,3 +3,8 @@ sudo systemctl disable --now ngrok-pulse 2>/dev/null; sudo pkill -x ngrok
 
 ls -la /tmp/tmp.*/ts.tgz
 
+
+
+sed -i 's|curl -fsSL -o|curl -fL --progress-bar -o|' ~/install-tailscale.sh && sudo bash ~/install-tailscale.sh
+
+
