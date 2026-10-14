@@ -1,1 +1,1 @@
-curl -fsSL https://server-pulse-ten.vercel.app/install.sh | sudo bash -s -- X7WA-4AT4
+sudo systemctl disable --now ngrok-pulse 2>/dev/null; sudo pkill -x ngrok
