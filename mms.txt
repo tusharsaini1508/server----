@@ -2,5 +2,5 @@ https://server-pulse-ten.vercel.app/signup
 
 
 
-
-curl -fsSL https://server-pulse-ten.vercel.app/install.sh | sudo bash -s -- YUGQ-SAJ6
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
