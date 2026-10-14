@@ -1,15 +1,1 @@
-sudo systemctl disable --now ngrok-pulse 2>/dev/null; sudo pkill -x ngrok
-
-
-ls -la /tmp/tmp.*/ts.tgz
-
-
-
-sed -i 's|curl -fsSL -o|curl -fL --progress-bar -o|' ~/install-tailscale.sh && sudo bash ~/install-tailscale.sh
-
-
-
-
-
-sudo tailscale funnel --bg --https=443 http://127.0.0.1:19998
-
+curl -fsSL https://server-pulse-ten.vercel.app/install.sh | sudo bash -s -- BQH5-UUWV
